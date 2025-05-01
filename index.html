@@ -1,0 +1,2139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>디펜스 게임 - 완성 버전</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #222;
+      overflow: hidden;
+      font-family: sans-serif;
+      width: 100%;
+      height: 100%;
+    }
+    #gameContainer {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #sidebar {
+      width: 200px;
+      min-width: 200px;
+      background: #111;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      box-sizing: border-box;
+      overflow-y: auto;
+      z-index: 10;
+    }
+    #sidebar h2 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      text-align: center;
+    }
+    #status span {
+      display: block;
+      margin: 5px 0;
+    }
+    #shop button, #towerActions button {
+      width: 100%;
+      margin: 4px 0;
+      padding: 6px;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    #shop button:hover, #towerActions button:hover {
+      background: #555;
+    }
+    #shop button:disabled {
+      background: #222;
+      color: #666;
+      cursor: not-allowed;
+    }
+    #canvasContainer {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: #333;
+      touch-action: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #towerActions {
+      margin-top: 10px;
+    }
+    #gameOverModal {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.8);
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    #gameOverModal h2 {
+      font-size: 36px;
+      margin-bottom: 20px;
+    }
+    #gameOverModal button {
+      padding: 12px 24px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    #gameOverModal button:hover {
+      background: #45a049;
+    }
+    #loadingScreen {
+      position: fixed;
+      z-index: 999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #222;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 24px;
+    }
+    .tower-info {
+      display: none;
+      position: absolute;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 20;
+    }
+    #waveProgressBar {
+      width: 100%;
+      height: 10px;
+      background: #333;
+      margin-top: 5px;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    #waveProgress {
+      height: 100%;
+      width: 0%;
+      background: #4CAF50;
+      transition: width 0.3s;
+    }
+    
+    /* 반응형 레이아웃 */
+    @media (max-width: 768px) {
+      #gameContainer {
+        flex-direction: column;
+      }
+      #sidebar {
+        width: 100%;
+        min-width: 0;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      #shop {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+      }
+      #towerActions {
+        display: flex;
+        gap: 5px;
+      }
+    }
+    
+    /* 작은 화면에서 버튼 텍스트 축소 */
+    @media (max-width: 480px) {
+      #shop button {
+        font-size: 11px;
+        padding: 4px 2px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="loadingScreen">
+  게임 로딩 중...
+</div>
+<div id="gameContainer">
+  <div id="sidebar">
+    <h2>상태 / 포탑</h2>
+    <div id="status">
+      <span>HP: <span id="hp">10</span></span>
+      <span>Money: <span id="money">400</span></span>
+      <span>Wave: <span id="wave">1</span></span>
+      <div id="waveProgressBar">
+        <div id="waveProgress"></div>
+      </div>
+    </div>
+    <div id="shop">
+      <button data-cost="50" onclick="selectTower('basic')">기본 (50)</button>
+      <button data-cost="160" onclick="selectTower('sniper')">스나이퍼 (160)</button>
+      <button data-cost="140" onclick="selectTower('machinegun')">머신건 (140)</button>
+      <button data-cost="120" onclick="selectTower('fire')">화염 (120)</button>
+      <button data-cost="170" onclick="selectTower('slow')">슬로우 (170)</button>
+      <button data-cost="250" onclick="selectTower('aoe')">광역 (250)</button>
+      <button data-cost="70" onclick="selectTower('laser')">레이저 (70)</button>
+      <button data-cost="450" onclick="selectTower('cannon')">대포 (450)</button>
+      <button data-cost="120" onclick="selectTower('electric')">전기 (120)</button>
+      <button data-cost="180" onclick="selectTower('poison')">독 (180)</button>
+      <button data-cost="280" onclick="selectTower('gravity')">중력 (280)</button>
+      <button data-cost="230" onclick="selectTower('ice')">냉기 (230)</button>
+      <button data-cost="290" onclick="selectTower('chainlightning')">연쇄번개 (290)</button>
+      <button data-cost="220" onclick="selectTower('explosion')">폭발 (220)</button>
+      <button data-cost="250" onclick="selectTower('confuse')">혼란 (250)</button>
+      <button data-cost="150" onclick="selectTower('drain')">흡혈 (150)</button>
+      <button data-cost="180" onclick="selectTower('dotlaser')">도트레이저 (180)</button>
+      <button data-cost="180" onclick="selectTower('random')">랜덤 (180)</button>
+      <button data-cost="120" onclick="selectTower('boomerang')">부메랑 (120)</button>
+      <button data-cost="90" onclick="selectTower('sword')">검포탑 (90)</button>
+      <button data-cost="150" onclick="selectTower('gearsaw')">기어톱 (150)</button>
+      <button data-cost="200" onclick="selectTower('mine')">지뢰 포탑 (200)</button>
+    </div>
+    <div id="towerActions">
+      <button id="upgradeButton" onclick="upgradeSelectedTower()" disabled>업그레이드</button>
+      <button id="sellButton" onclick="sellSelectedTower()" disabled>판매</button>
+    </div>
+  </div>
+  <div id="canvasContainer">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+  <div class="tower-info" id="towerInfo"></div>
+</div>
+
+<div id="gameOverModal">
+  <h2>게임 오버!</h2>
+  <p>웨이브 <span id="finalWave">0</span>까지 생존했습니다</p>
+  <button id="restartButton">다시 시작</button>
+</div>
+
+<script>
+  // 전역 변수 선언
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const upgradeButton = document.getElementById('upgradeButton');
+  const sellButton = document.getElementById('sellButton');
+  const towerInfo = document.getElementById('towerInfo');
+  const gameOverModal = document.getElementById('gameOverModal');
+  const loadingScreen = document.getElementById('loadingScreen');
+  const restartButton = document.getElementById('restartButton');
+
+  // 게임 스케일링 변수
+  let scaleFactor = 1;
+  const BASE_WIDTH = 1280;
+  const BASE_HEIGHT = 720;
+  let devicePixelRatio = window.devicePixelRatio || 1;
+  
+  // 게임 상태 변수
+  let towers = [];
+  let enemies = [];
+  let bullets = [];
+  let effects = [];
+  let hp = 10;
+  let money = 600;
+  let wave = 0;
+  let enemiesToSpawn = 0;
+  let waveEnemies = 0;
+  let lastEnemySpawn = 0;
+  let waveCooldown = 0;
+  let selectedTower = null;
+  let placingTower = false;
+  let selectedTowerType = null;
+  let lastTime = 0;
+  let animationFrameId = null;
+  let isGameOver = false;
+  let isPaused = false;
+  let isPlacing = false;
+  let mouseX = 0;
+  let mouseY = 0;
+  let currentWaveTheme = null;
+  
+  // 포탑 가격 정의
+  const towerCosts = {
+    basic: 50,
+    sniper: 160,
+    machinegun: 140,
+    fire: 120,
+    slow: 170,
+    aoe: 250,
+    laser: 70,
+    cannon: 450,
+    electric: 120,
+    poison: 180,
+    gravity: 280,
+    ice: 230,
+    chainlightning: 290,
+    explosion: 220,
+    confuse: 250,
+    drain: 150,
+    dotlaser: 180,
+    random: 180,
+    boomerang: 120,
+    sword: 90,
+    gearsaw: 150,
+    mine: 200
+  };
+  
+  // 포탑 설명 정의
+  const towerDescriptions = {
+    basic: "기본 포탑: 일반적인 공격 포탑입니다.",
+    sniper: "스나이퍼 포탑: 느리지만 강력한 데미지를 줍니다.",
+    machinegun: "머신건 포탑: 연속 공격이 가능합니다.",
+    fire: "화염 포탑: 적에게 화상 효과를 줍니다.",
+    slow: "슬로우 포탑: 적의 이동 속도를 감소시킵니다.",
+    aoe: "광역 포탑: 범위 내 모든 적을 공격합니다.",
+    laser: "레이저 포탑: 연속적인 빔으로 공격합니다.",
+    cannon: "대포 포탑: 폭발 효과로 광역 데미지를 줍니다.",
+    electric: "전기 포탑: 주변 적에게 추가 피해를 입힙니다.",
+    poison: "독 포탑: 지속적인 독 데미지를 입힙니다.",
+    gravity: "중력 포탑: 적을 끌어당기고 느리게 합니다.",
+    ice: "냉기 포탑: 적을 얼려 일시적으로 멈추게 합니다.",
+    chainlightning: "연쇄번개 포탑: 적에서 적으로 번개가 이동합니다.",
+    explosion: "폭발 포탑: 큰 범위에 강력한 데미지를 줍니다.",
+    confuse: "혼란 포탑: 적의 이동 방향을 반대로 바꿉니다.",
+    drain: "흡혈 포탑: 적에게 피해를 주고 돈을 얻습니다.",
+    dotlaser: "도트레이저 포탑: 지속적인 레이저 데미지를 줍니다.",
+    random: "랜덤 포탑: 무작위 특성을 가진 포탑입니다.",
+    boomerang: "부메랑 포탑: 왕복 공격으로 여러번 피해를 줍니다.",
+    sword: "검포탑: 근접 범위에 강력한 피해를 줍니다.",
+    gearsaw: "기어톱 포탑: 근접 범위 피해와 출혈 효과를 줍니다.",
+    mine: "지뢰 포탑: 보이지 않는 지뢰를 설치해 적이 밟으면 폭발합니다.",
+  };
+
+  function init() {
+  try {
+    // 캔버스 리사이징
+    resizeCanvas();
+
+    // 이벤트 리스너 등록
+    window.addEventListener('resize', resizeCanvas);
+    canvas.addEventListener('click', canvasClickHandler);
+    canvas.addEventListener('mousemove', canvasMouseMoveHandler);
+    canvas.addEventListener('touchstart', canvasTouchHandler);
+    canvas.addEventListener('touchmove', canvasTouchHandler);
+    restartButton.addEventListener('click', resetGame);
+    currentWaveTheme = null;
+
+    // 모바일 이벤트 처리
+    document.addEventListener('touchmove', function(e) {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // 웨이브 시작
+    startNewWave();
+
+    // 게임 루프 시작
+    lastTime = performance.now();
+    gameLoop(lastTime);
+
+    // 버튼 활성화 상태 업데이트
+    updateButtonStates();
+  } catch (error) {
+    console.error('게임 초기화 중 오류 발생:', error);
+  } finally {
+    // 로딩 화면 제거 (오류가 발생해도 실행)
+    setTimeout(() => {
+      const loadingScreen = document.getElementById('loadingScreen');
+      if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+      }
+    }, 500);
+  }
+}
+
+
+  // 캔버스 리사이즈 함수
+  function resizeCanvas() {
+    const canvasContainer = document.getElementById('canvasContainer');
+    
+    // 컨테이너 크기에 맞춰 캔버스 크기 조정
+    const targetWidth = canvasContainer.clientWidth;
+    const targetHeight = canvasContainer.clientHeight;
+    
+    // 화면 비율 계산
+    scaleFactor = Math.min(targetWidth / BASE_WIDTH, targetHeight / BASE_HEIGHT);
+    devicePixelRatio = window.devicePixelRatio || 1;
+    
+    // 캔버스 크기 및 스케일 설정
+    canvas.width = BASE_WIDTH * scaleFactor * devicePixelRatio;
+    canvas.height = BASE_HEIGHT * scaleFactor * devicePixelRatio;
+    canvas.style.width = `${BASE_WIDTH * scaleFactor}px`;
+    canvas.style.height = `${BASE_HEIGHT * scaleFactor}px`;
+    
+    // 컨텍스트 스케일 조정
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(scaleFactor * devicePixelRatio, scaleFactor * devicePixelRatio);
+    
+    // 화면 다시 그리기
+    if (towers.length > 0 || enemies.length > 0) {
+      drawGame();
+    }
+  }
+
+  // 게임 로직 클래스들 정의
+  class Tower {
+    constructor(x, y, type) {
+      this.x = x;
+      this.y = y;
+      this.type = type;
+      this.level = 1;
+      this.lastShot = 0;
+      this.abilityUnlocked = false;
+      this.targets = [];
+      this.range = 150;
+      this.fireRate = 1;
+      this.damage = 2;
+      this.color = "white";
+      
+      // 타입별 스탯 설정
+      const stats = {
+        basic:         {range: 150, fireRate: 0.6, damage: 1.5, color: "blue"},
+        sniper:        {range: 300, fireRate: 2.5, damage: 7, color: "purple"},
+        machinegun:    {range: 110, fireRate: 0.18, damage: 1, color: "lime"},
+        fire:          {range: 100, fireRate: 1, damage: 2, color: "orange"},
+        slow:          {range: 200, fireRate: 2, damage: 1, color: "cyan"},
+        aoe:           {range: 180, fireRate: 1.5, damage: 2, color: "pink"},
+        laser:         {range: 150, fireRate: 0.1, damage: 0.25, color: "white"},
+        cannon:        {range: 140, fireRate: 5.0, damage: 30, color: "brown"},
+        electric:      {range: 130, fireRate: 1.0, damage: 3, color: "yellow"},
+        poison:        {range: 200, fireRate: 1.5, damage: 1, color: "green"},
+        gravity:       {range: 100, fireRate: 4.0, damage: 0.5, color: "silver"},
+        ice:           {range: 250, fireRate: 1.2, damage: 2, color: "lightblue"},
+        chainlightning:{range: 250, fireRate: 3, damage: 5, color: "violet"},
+        explosion:     {range: 140, fireRate: 2.0, damage: 5, color: "red"},
+        confuse:       {range: 160, fireRate: 2.5, damage: 1, color: "magenta"},
+        drain:         {range: 130, fireRate: 1.5, damage: 4, color: "gold"},
+        dotlaser:      {range: 200, fireRate: 0.1, damage: 0.2, color: "lightgreen"},
+        random:        {range: Math.random()*300+50, fireRate: Math.random()*2+0.01, damage: Math.random()*5+1, color: "orange"},
+        boomerang:     {range: 250, fireRate: 2.0, damage: 5, color: "deepskyblue"},
+        sword:         {range: 40, fireRate: 0.6, damage: 6, color: "crimson"},
+        gearsaw:       {range: 20, fireRate: 0.1, damage: 0.5, color: "silver"},
+        mine: {range: 120, fireRate: 2.5, damage: 8, color: "darkolivegreen"},
+      };
+      
+      // 기본 스탯에 타입별 스탯 적용
+      if (stats[type]) {
+        Object.assign(this, stats[type]);
+      }
+    }
+    
+    upgrade() {
+      const upgradeCost = Math.floor(40 * this.level * 1.5);
+      
+      if (money >= upgradeCost && this.level < 5) {
+        money -= upgradeCost;
+        this.level++;
+        this.damage *= 1.5;
+        this.range += 20;
+        this.fireRate *= 0.9;
+        updateUI();
+        
+        if (this.level >= 5 && !this.abilityUnlocked) {
+          this.abilityUnlocked = true;
+          showMessage(`${this.type} 포탑의 특수 능력이 활성화되었습니다!`, this.color);
+        }
+        
+        return true;
+      }
+      
+      return false;
+    }
+    
+    getUpgradeCost() {
+      return Math.floor(40 * this.level * 1.5);
+    }
+    
+    getSellValue() {
+      const baseCost = towerCosts[this.type];
+      const upgradeCost = this.level > 1 ? 
+        Array.from({length: this.level - 1}, (_, i) => Math.floor(30 * (i + 1) * 1.5))
+          .reduce((sum, cost) => sum + cost, 0) : 0;
+      
+      return Math.floor((baseCost + upgradeCost) * 0.7);
+    }
+    
+    fire(target) {
+      const t = target;
+      const unlocked = this.abilityUnlocked;
+      
+      switch (this.type) {
+        case "basic":
+          const crit = unlocked && Math.random() < 0.2;
+          bullets.push(new Bullet(this.x, this.y, t, this.damage * (crit ? 2 : 1), this.color, false, false, false, crit));
+          break;
+          
+        case "sniper":
+          const critSniper = unlocked && Math.random() < 0.5;
+          bullets.push(new Bullet(this.x, this.y, t, this.damage * (critSniper ? 2 : 1), this.color));
+          break;
+          
+        case "machinegun":
+          bullets.push(new Bullet(this.x, this.y, t, this.damage, this.color));
+          if (unlocked) bullets.push(new Bullet(this.x + 3, this.y + 3, t, this.damage, this.color));
+          break;
+          
+        case "fire":
+          bullets.push(new Bullet(this.x, this.y, t, this.damage, "orange", true));
+          if (unlocked) t.burning = 3;
+          break;
+          
+        case "slow":
+          t.slow(0.5, unlocked ? 4 : 2);
+          effects.push(new Effect(t.x, t.y, "cyan"));
+          break;
+          
+        case "aoe":
+          enemies.forEach(e => {
+            if (Math.hypot(e.x - this.x, e.y - this.y) < this.range + (unlocked ? 50 : 0))
+              bullets.push(new Bullet(this.x, this.y, e, this.damage, this.color));
+          });
+          break;
+          
+        case "laser":
+          if (unlocked) {
+            enemies.forEach(e => {
+              if (Math.abs(e.y - this.y) < 10) 
+                bullets.push(new Laser(this.x, this.y, e, this.damage, this.color));
+            });
+          } else {
+            bullets.push(new Laser(this.x, this.y, t, this.damage, this.color));
+          }
+          break;
+          
+        case "cannon":
+          bullets.push(new Bullet(this.x, this.y, t, this.damage, this.color, false, true, false, unlocked));
+          break;
+          
+        case "electric":
+          bullets.push(new Bullet(this.x, this.y, t, this.damage, "yellow"));
+          if (unlocked) {
+            enemies.forEach(e => {
+              if (e !== t && Math.hypot(e.x - t.x, e.y - t.y) < 60)
+                bullets.push(new Bullet(t.x, t.y, e, this.damage / 2, "yellow"));
+            });
+          }
+          break;
+          
+        case "poison":
+          t.poison(5, 2);
+          if (unlocked) t.poisonStack = true;
+          effects.push(new Effect(t.x, t.y, "green"));
+          break;
+          
+        case "gravity":
+          enemies.forEach(e => {
+            if (Math.hypot(e.x - this.x, e.y - this.y) < this.range) {
+              e.slow(0.5, 1 + (unlocked ? 2 : 0));
+              // 중력 포탑 기능 개선 - 적을 끌어당김
+              e.pullTowards(this.x, this.y, unlocked ? 40 : 25, 0.5);
+            }
+          });
+          effects.push(new Effect(this.x, this.y, "silver"));
+          break;
+          
+        case "ice":
+          if (Math.random() < 0.4) t.freeze(unlocked ? 3 : 1);
+          bullets.push(new Bullet(this.x, this.y, t, this.damage, "lightblue"));
+          break;
+          
+        case "chainlightning":
+          // 연쇄 번개 로직 수정 - 첫 적에서 다른 적으로 연쇄
+          const hits = unlocked ? 5 : 3;
+          let chain = [t];
+          
+          for (let i = 0; i < hits - 1; i++) {
+            const last = chain[chain.length - 1];
+            const next = enemies.find(e => 
+              !chain.includes(e) && Math.hypot(e.x - last.x, e.y - last.y) < 100);
+            
+            if (!next) break;
+            chain.push(next);
+          }
+          
+          bullets.push(new ChainLightning(this.x, this.y, chain, this.damage, "violet"));
+          break;
+          
+        case "explosion":
+          bullets.push(new Bullet(this.x, this.y, t, this.damage, "red", false, true));
+          if (unlocked) t.burning = 2;
+          break;
+          
+        case "confuse":
+          t.confuse(unlocked ? 3 : 1);
+          effects.push(new Effect(t.x, t.y, "magenta"));
+          break;
+          
+        case "drain":
+          bullets.push(new Bullet(this.x, this.y, t, this.damage, "gold", false, false, true, unlocked));
+          break;
+          
+        case "dotlaser":
+          bullets.push(new DotLaser(this.x, this.y, t, this.damage, "lightgreen", unlocked));
+          break;
+          
+          case "random":
+            const dmg = Math.random() * 5 + 1;
+            bullets.push(new Bullet(this.x, this.y, t, dmg, "orange"));
+
+            if (unlocked) {
+              const effectsList = ["freeze", "burn", "poison", "slow", "confuse", "bleed"];
+              const effect = effectsList[Math.floor(Math.random() * effectsList.length)];
+            
+              switch (effect) {
+                case "freeze":
+                  t.freeze(1);
+                  effects.push(new Effect(t.x, t.y, "cyan"));
+                  break;
+                case "burn":
+                  t.burning = 3;
+                  effects.push(new Effect(t.x, t.y, "orange"));
+                  break;
+                case "poison":
+                  t.poison(5, 2);
+                  effects.push(new Effect(t.x, t.y, "green"));
+                  break;
+                case "slow":
+                  t.slow(0.5, 2);
+                  effects.push(new Effect(t.x, t.y, "cyan"));
+                  break;
+                case "confuse":
+                  t.confuse(1.5);
+                  effects.push(new Effect(t.x, t.y, "magenta"));
+                  break;
+                case "bleed":
+                  t.bleed = 3;
+                  effects.push(new Effect(t.x, t.y, "red"));
+                  break;
+              }
+            }
+            break;
+
+          
+        case "boomerang":
+          const dir = getNearestEnemyDirection(this.x, this.y);
+          bullets.push(new Boomerang(this.x, this.y, this.damage, dir, unlocked));
+          break;
+          
+        case "sword":
+          enemies.forEach(e => {
+            if (Math.hypot(e.x - this.x, e.y - this.y) < this.range) {
+              e.hp -= this.damage;
+              if (unlocked) e.bleed = 3;
+              effects.push(new Effect(e.x, e.y, "crimson"));
+            }
+          });
+          break;
+
+          case "gearsaw":
+  // 기본 근접 범위 공격 + 출혈
+            enemies.forEach(e => {
+              if (Math.hypot(e.x - this.x, e.y - this.y) < this.range) {
+                e.hp -= this.damage;
+                e.bleed = 2 + (this.abilityUnlocked ? 2 : 0);  // 2~4초 출혈
+                effects.push(new Effect(e.x, e.y, "red"));
+              }
+            });
+          
+            // 업그레이드 효과: 톱날 폭주 (2초마다 적 끌어당기고 추가 출혈)
+            if (this.abilityUnlocked) {
+              if (!this.frenzyTimer) this.frenzyTimer = 0;
+              this.frenzyTimer += this.fireRate;
+            
+              if (this.frenzyTimer >= 2.0) {
+                this.frenzyTimer = 0;
+                enemies.forEach(e => {
+                  if (Math.hypot(e.x - this.x, e.y - this.y) < this.range) {
+                    e.pullTowards(this.x, this.y, 50, 0.3); // 끌어당김
+                    e.bleed = 4;
+                    effects.push(new Effect(e.x, e.y, "silver")); // 톱날 폭주 이펙트
+                  }
+                });
+              }
+            }
+            break;
+          
+            case "mine": {
+              const mx = this.x + (Math.random() - 0.5) * this.range;
+              const my = this.y + (Math.random() - 0.5) * this.range;
+              bullets.push(new Mine(mx, my, this.damage, this.abilityUnlocked));
+              }
+              break;
+              
+      }
+      
+      this.lastShot = 0; // 마지막 공격 시간 재설정
+    }
+    
+    update(delta) {
+      this.lastShot += delta;
+
+      // 적 탐지 - 비행 유닛 및 투명 유닛 고려
+      this.targets = enemies.filter(e => {
+        const distance = Math.hypot(e.x - this.x, e.y - this.y);
+
+        // 사거리 내에 있는지 확인
+        if (distance >= this.range) return false;
+
+        // 비행 유닛 확인 (일부 포탑은 비행 유닛 공격 불가)
+        if (e.isFlying) {
+          if (this.type === "basic" || this.type === "machinegun" || this.type === "sword"|| this.type === "gearsaw") {
+            return false;
+          }
+        }
+
+        // 투명 유닛 확인 (일부 포탑만 투명 유닛 감지 가능)
+        if (e.invisibilityTimer > 0) {
+          return this.type === "sniper" || this.type === "electric";
+        }
+
+        return true;
+      });
+
+      // 공격 실행
+      if (this.lastShot >= this.fireRate && (this.targets.length > 0 || this.type === "mine")) {
+        this.fire(this.targets[0]);  // ✅ 첫 번째 타겟만 전달
+      }
+    }
+    
+    draw() {
+      // 포탑 본체 그리기
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 15, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 포탑 수준 표시
+      ctx.fillStyle = "white";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`Lv${this.level}`, this.x, this.y + 30);
+      
+      // 선택된 포탑 하이라이트
+      if (this === selectedTower) {
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 18, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // 범위 표시
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      
+      // 5레벨 강화 표시
+      if (this.abilityUnlocked) {
+        ctx.strokeStyle = "gold";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 20, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+  
+  class Enemy {
+  constructor(wave) {
+    this.x = 0;
+    this.y = Math.random() * BASE_HEIGHT;
+    this.type = "normal";
+    this.hp = 10 + wave * 2;
+    this.maxHp = this.hp;
+    this.speed = 40 + wave;
+    this.baseSpeed = this.speed;
+    this.freezeTimer = 0;
+    this.confuseTimer = 0;
+    this.slowTimer = 0;
+    this.burning = 0;
+    this.bleed = 0;
+    this.curse = 0;  // 저주 효과 지속 시간
+    this.poisonDPS = 0;
+    this.poisonTime = 0;
+    this.poisonStack = false;
+    this.teleportCooldown = 0;
+    this.teleportTimer = 0;
+    
+    // 새로운 속성 추가
+    this.armorValue = 0;      // 방어력
+    this.healPower = 0;       // 치유력
+    this.healRadius = 0;      // 치유 범위
+    this.healTimer = 0;       // 치유 타이머
+    this.invisibilityTimer = 0; // 투명화 타이머
+    this.teleportCooldown = 0;  // 텔레포트 쿨다운
+    this.isSplitter = false;    // 분열 여부
+    this.isFlying = false;      // 비행 여부
+    
+    // 중력 당김 효과용 속성
+    this.pullTargetX = 0;
+    this.pullTargetY = 0;
+    this.pullStrength = 0;
+    this.pullTimer = 0;
+    
+    // 적 타입 결정 함수 호출
+    this.determineEnemyType(wave);
+  }
+  
+  determineEnemyType(wave) {
+    // 웨이브에 따른 적 타입 결정 로직
+    const typeChances = {
+      normal: 0.6,
+      fast: 0,
+      armored: 0,
+      healer: 0,
+      splitter: 0,
+      invisible: 0,
+      teleporter: 0,
+      flying: 0,
+      elite: 0,
+      boss: 0
+    };
+    
+    // 웨이브에 따라 새로운 적 타입 등장 확률 조정
+    if (wave >= 3) typeChances.fast = 0.1;
+    if (wave >= 5) typeChances.armored = 0.1;
+    if (wave >= 7) typeChances.healer = 0.1;
+    if (wave >= 10) typeChances.splitter = 0.05;
+    if (wave >= 12) typeChances.invisible = 0.05;
+    if (wave >= 15) typeChances.teleporter = 0.0;
+    if (wave >= 18) typeChances.flying = 0.05;
+    if (wave >= 6) typeChances.elite = 0.1;
+    
+    // 보스 확률 조정 (5의 배수 웨이브)
+    if (wave % 5 === 0) {
+      typeChances.boss = 0.2;
+    }
+    
+    // 전체 확률의 합 계산 및 조정
+    let totalChance = Object.values(typeChances).reduce((sum, chance) => sum + chance, 0);
+    typeChances.normal = Math.max(0, 1 - (totalChance - typeChances.normal));
+    
+    // 적 타입 랜덤 결정
+    const random = Math.random();
+    let cumulativeChance = 0;
+    
+    for (const [type, chance] of Object.entries(typeChances)) {
+      cumulativeChance += chance;
+      if (random < cumulativeChance) {
+        this.type = type;
+        break;
+      }
+    }
+    
+    // 적 타입에 따른 속성 설정
+    this.applyTypeProperties(wave);
+  }
+  
+  applyTypeProperties(wave) {
+    // 기본 적 속성 재설정
+    this.hp = 10 + wave * 1.9;
+    this.maxHp = this.hp;
+    this.speed = 40 + wave;
+    this.baseSpeed = this.speed;
+    
+    // 타입별 특수 속성 적용
+    switch (this.type) {
+      case "fast":
+        this.hp *= 0.6;      // HP 감소
+        this.speed *= 2;     // 속도 증가
+        this.baseSpeed = this.speed;
+        break;
+        
+      case "armored":
+        this.hp *= 4;        // HP 증가
+        this.speed *= 0.5;   // 속도 감소
+        this.baseSpeed = this.speed;
+        this.armorValue = 3; // 데미지 감소
+        break;
+        
+      case "healer":
+        this.hp *= 0.6;        // HP 약간 증가
+        this.speed *= 0.8;   // 속도 약간 감소
+        this.baseSpeed = this.speed;
+        this.healRadius = 100; // 치유 범위
+        this.healPower = 2 + Math.floor(wave / 5); // 치유량
+        break;
+        
+      case "splitter":
+        this.hp *= 3;        // HP 증가
+        this.isSplitter = true;
+        break;
+        
+      case "invisible":
+        this.invisibilityTimer = 3; // 초기 투명 시간
+        break;
+        
+      case "teleporter":
+        this.teleportCooldown = 8; // 텔레포트 주기
+        break;
+        
+      case "flying":
+        this.isFlying = true;
+        this.hp *= 1.5;      // HP 약간 증가
+        break;
+        
+      case "elite":
+        this.hp *= 3;
+        this.speed *= 0.7;
+        this.baseSpeed = this.speed;
+        
+        // 랜덤으로 특수 능력 추가
+        if (Math.random() < 0.1) this.armorValue = 2;
+        if (Math.random() < 0.02) this.isFlying = true;
+        break;
+        
+      case "boss":
+        this.hp *= 8;
+        this.speed *= 0.5;
+        this.baseSpeed = this.speed;
+        
+        // 보스는 여러 특수 능력을 가질 수 있음
+        if (Math.random() < 0.05) this.armorValue = 5;
+        if (Math.random() < 0.02) {
+          this.healRadius = 150;
+          this.healPower = 2 + Math.floor(wave / 3);
+        }
+        if (Math.random() < 0.04) this.isFlying = true;
+        if (Math.random() < 0.02) this.teleportCooldown = 10;
+        break;
+    }
+    
+    this.maxHp = this.hp; // 최대 HP 업데이트
+  }
+
+    update(delta) {
+      // 얼음 효과 처리
+      if (this.freezeTimer > 0) { 
+        this.freezeTimer -= delta; 
+        return; 
+      }
+
+      // 혼란 효과 처리
+      if (this.confuseTimer > 0) { 
+        this.x -= this.speed * delta; 
+        this.confuseTimer -= delta; 
+        return; 
+      }
+
+      // 치유 능력 처리
+      if (this.healRadius > 0 && this.healPower > 0) {
+        this.healTimer += delta;
+
+        if (this.healTimer >= 2) { // 2초마다 치유
+          this.healTimer = 0;
+
+          // 범위 내 모든 적 치유
+          enemies.forEach(e => {
+            if (e !== this && Math.hypot(e.x - this.x, e.y - this.y) < this.healRadius) {
+              e.hp = Math.min(e.maxHp, e.hp + this.healPower);
+              effects.push(new Effect(e.x, e.y, "green")); // 치유 효과
+            }
+          });
+
+          // 치유 시각 효과
+          effects.push(new Effect(this.x, this.y, "lightgreen"));
+        }
+      }
+
+      // 텔레포트 처리
+      if (this.teleportCooldown > 0) {
+        this.teleportTimer += delta;
+
+        if (this.teleportTimer >= this.teleportCooldown) {
+          // 텔레포트 실행
+          this.x += this.speed * 4; // 앞으로 순간이동
+          this.teleportTimer = 0; // 타이머 리셋
+          effects.push(new Effect(this.x, this.y, "purple")); // 시각 효과
+        }
+      }
+
+      // 투명화 처리
+      if (this.invisibilityTimer > 0) {
+        this.invisibilityTimer -= delta;
+      }
+
+      // 일반 이동
+      this.x += this.speed * delta;
+
+      // 기존 상태 효과 처리
+      if (this.burning > 0) { 
+        this.hp -= 4 * delta; 
+        this.burning -= delta; 
+      }
+
+      if (this.bleed > 0) { 
+        this.hp -= 1 * delta; 
+        this.bleed -= delta; 
+      }
+
+      if (this.curse > 0) { 
+        this.curse -= delta; 
+      }
+
+      if (this.poisonTime > 0) {
+        this.hp -= this.poisonDPS * delta;
+        this.poisonTime -= delta;
+      }
+
+      // 중력 당김 효과
+      if (this.pullTimer > 0) {
+        const dx = this.pullTargetX - this.x;
+        const dy = this.pullTargetY - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 5) {  // 최소 거리 이상일 때만 당김 효과
+          this.x += (dx / dist) * this.pullStrength * delta;
+          this.y += (dy / dist) * this.pullStrength * delta;
+        }
+
+        this.pullTimer -= delta;
+      }
+
+      // 적이 죽었을 때 분열 처리
+      if (this.hp <= 0 && this.isSplitter) {
+        this.split();
+      }
+    }
+
+    split() {
+      // 이미 처리된 적은 건너뛰기
+      if (this.hasSplit) return;
+      this.hasSplit = true;
+
+      // 2~3개의 작은 적 생성
+      const count = 2 + Math.floor(Math.random() * 2);
+
+      for (let i = 0; i < count; i++) {
+        const smallEnemy = new Enemy(Math.max(1, wave - 2));
+        smallEnemy.x = this.x;
+        smallEnemy.y = this.y + (Math.random() * 40 - 20); // 약간 분산된 위치
+        smallEnemy.hp /= 2;  // HP 감소
+        smallEnemy.maxHp = smallEnemy.hp;
+        smallEnemy.speed *= 1.5; // 속도 증가
+        smallEnemy.baseSpeed = smallEnemy.speed;
+
+        enemies.push(smallEnemy);
+      }
+
+      // 시각 효과
+      effects.push(new Effect(this.x, this.y, "orange", 1.5));
+    }
+
+    takeDamage(amount, ignoreArmor = false) {
+      // 방어력 적용
+      let actualDamage = amount;
+      if (this.armorValue > 0 && !ignoreArmor) {
+        actualDamage = Math.max(1, amount - this.armorValue);
+      }
+      
+      if (this.curse > 0) {
+        actualDamage *= 1.4;  // 저주 중일 때 40% 추가 피해
+      }
+
+      this.hp -= actualDamage;
+
+      return actualDamage; // 실제 적용된 데미지 반환
+    }
+
+    
+    slow(factor, time) {
+      this.speed = this.baseSpeed * factor;
+      this.slowTimer = Math.max(this.slowTimer, time);
+    }
+    
+    pullTowards(x, y, strength, time) {
+      this.pullTargetX = x;
+      this.pullTargetY = y;
+      this.pullStrength = strength;
+      this.pullTimer = Math.max(this.pullTimer, time);
+    }
+    
+    poison(dps, duration) {
+      if (this.poisonStack || this.poisonTime <= 0) {
+        this.poisonDPS = Math.max(this.poisonDPS, dps);
+        this.poisonTime = Math.max(this.poisonTime, duration);
+      }
+    }
+    
+    freeze(time) {
+      this.freezeTimer = Math.max(this.freezeTimer, time);
+    }
+    
+    confuse(time) {
+      this.confuseTimer = Math.max(this.confuseTimer, time);
+    }
+    
+    draw() {
+      // 투명 상태 처리
+      ctx.globalAlpha = this.invisibilityTimer > 0 ? 0.3 : 1;
+
+      // 적 타입에 따라 색상과 모양 결정
+      let color = "red";
+      let size = 8;
+
+      switch (this.type) {
+        case "fast":
+          color = "yellow";
+          size = 6;
+          break;
+        case "armored":
+          color = "gray";
+          size = 10;
+          break;
+        case "healer":
+          color = "green";
+          size = 9;
+          break;
+        case "splitter":
+          color = "orange";
+          size = 12;
+          break;
+        case "invisible":
+          color = "lightblue";
+          size = 8;
+          break;
+        case "teleporter":
+          color = "purple";
+          size = 8;
+          break;
+        case "flying":
+          color = "skyblue";
+          size = 9;
+          break;
+        case "elite":
+          color = "crimson";
+          size = 14;
+          break;
+        case "boss":
+          color = "darkred";
+          size = 20;
+          break;
+      }
+
+      // 적 그리기
+      ctx.fillStyle = color;
+      ctx.beginPath();
+
+      if (this.isFlying) {
+        // 비행 유닛은 삼각형으로 표시
+        ctx.moveTo(this.x, this.y - size);
+        ctx.lineTo(this.x - size, this.y + size);
+        ctx.lineTo(this.x + size, this.y + size);
+      } else {
+        // 일반 유닛은 원으로 표시
+        ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
+      }
+
+      ctx.fill();
+
+      // 방어력이 있으면 테두리 표시
+      if (this.armorValue > 0) {
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // 치유 능력이 있으면 치유 범위 표시
+      if (this.healRadius > 0) {
+        ctx.strokeStyle = "rgba(0,255,0,0.3)";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.healRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // HP 바 표시
+      const hpBarWidth = size * 2;
+      const hpBarHeight = 4;
+      const hpRatio = Math.max(0, this.hp / this.maxHp);
+
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(this.x - hpBarWidth / 2, this.y - size - 10, hpBarWidth, hpBarHeight);
+
+      ctx.fillStyle = hpRatio > 0.5 ? "lime" : hpRatio > 0.25 ? "yellow" : "red";
+      ctx.fillRect(this.x - hpBarWidth / 2, this.y - size - 10, hpBarWidth * hpRatio, hpBarHeight);
+
+      const statusValues = [
+        { timer: this.burning, max: 3, color: "orange" },
+        { timer: this.poisonTime, max: 5, color: "green" },
+        { timer: this.freezeTimer, max: 3, color: "cyan" },
+        { timer: this.bleed, max: 3, color: "red" },
+        { timer: this.confuseTimer, max: 3, color: "magenta" }
+      ];
+
+      let sx = this.x - 15;  // 바 시작 위치
+      let sy = this.y + size + 8;
+      let totalWidth = 40;
+      let barHeight = 3;
+          
+      statusValues.forEach(s => {
+        if (s.timer > 0) {
+          let width = totalWidth * (s.timer / s.max);
+          ctx.fillStyle = s.color;
+          ctx.fillRect(sx, sy, width, barHeight);
+          sx += width;  // 다음 상태 바는 오른쪽에 붙이기
+        }
+      });
+
+      // 투명도 리셋
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  class Bullet {
+    constructor(x, y, target, damage, color, instant = false, explosion = false, drain = false, enhanced = false) {
+      this.x = x;
+      this.y = y;
+      this.target = target;
+      this.damage = damage;
+      this.color = color;
+      this.instant = instant;
+      this.explosion = explosion;
+      this.drain = drain;
+      this.enhanced = enhanced;
+      this.speed = 400;
+      this.dead = false;
+    }
+    
+    update(delta) {
+      // 타겟이 없거나 이미 죽었으면 불릿도 제거
+      if (!this.target || this.target.hp <= 0) {
+        this.dead = true;
+        return;
+      }
+      
+      // 즉시 타격 불릿 처리
+      if (this.instant) {
+        this.hit(this.target);
+        this.dead = true;
+        return;
+      }
+      
+      // 불릿 이동 및 충돌 검사
+      const dx = this.target.x - this.x;
+      const dy = this.target.y - this.y;
+      const dist = Math.hypot(dx, dy);
+      
+      if (dist < 5) {
+        this.hit(this.target);
+        this.dead = true;
+      } else {
+        this.x += (dx / dist) * this.speed * delta;
+        this.y += (dy / dist) * this.speed * delta;
+      }
+    }
+    
+    hit(target) {
+      if (this.explosion) {
+        // 폭발 효과 처리
+        const explosionRadius = this.enhanced ? 100 : 70;
+        
+        enemies.forEach(e => {
+          if (Math.hypot(e.x - target.x, e.y - target.y) < explosionRadius) {
+            e.hp -= this.damage;
+            effects.push(new Effect(e.x, e.y, "red"));
+          }
+        });
+      } else {
+        // 일반 공격 처리
+        target.hp -= this.damage;
+        
+        // 흡혈 효과 처리
+        if (this.drain) {
+          const drainAmount = Math.floor(this.damage * (this.enhanced ? 0.5 : 0.25));
+          money += drainAmount;
+          effects.push(new Effect(target.x, target.y, "gold"));
+        }
+      }
+      
+      // 크리티컬 효과 표시
+      if (this.enhanced) {
+        effects.push(new Effect(target.x, target.y, "white"));
+      }
+    }
+    
+    draw() {
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  class Laser {
+    constructor(x, y, target, damage, color, duration = 0.2) {
+      this.x = x;
+      this.y = y;
+      this.target = target;
+      this.damage = damage;
+      this.color = color;
+      this.timer = duration;
+      this.dead = false;
+      this.hit(); // 즉시 대상에게 데미지
+    }
+    
+    hit() {
+      if (this.target) {
+        this.target.hp -= this.damage;
+      }
+    }
+    
+    update(delta) {
+      this.timer -= delta;
+      if (this.timer <= 0 || !this.target) {
+        this.dead = true;
+      }
+    }
+    
+    draw() {
+      if (!this.target) return;
+      
+      // 레이저 라인 그리기
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.target.x, this.target.y);
+      ctx.stroke();
+      
+      // 레이저 충돌 효과 그리기
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.target.x, this.target.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  class DotLaser {
+    constructor(x, y, target, damage, color, blind = false) {
+      this.x = x;
+      this.y = y;
+      this.target = target;
+      this.damage = damage;
+      this.color = color;
+      this.timer = 1.5;
+      this.blind = blind;
+      this.dead = false;
+    }
+    
+    update(delta) {
+      this.timer -= delta;
+      if (this.timer <= 0 || !this.target) {
+        this.dead = true;
+      } else {
+        this.target.hp -= this.damage * delta;
+        if (this.blind) this.target.curse = 2;
+        
+        if (Math.random() < 0.3) {
+          effects.push(new Effect(this.target.x, this.target.y, this.color));
+        }
+      }
+    }
+    
+    draw() {
+      if (!this.target) return;
+      
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.target.x, this.target.y);
+      ctx.stroke();
+    }
+  }
+  
+  class ChainLightning {
+    constructor(x, y, targets, damage, color) {
+      this.targets = targets;
+      this.damage = damage;
+      this.color = color;
+      this.timer = 0.5;
+      this.points = [{x, y}]; // 시작점은 포탑
+      this.dead = false;
+      
+      // 각 대상의 위치를 points 배열에 추가
+      targets.forEach(t => {
+        this.points.push({x: t.x, y: t.y});
+        t.hp -= this.damage; // 즉시 대상에게 데미지를 줌
+      });
+    }
+    
+    update(delta) {
+      this.timer -= delta;
+      if (this.timer <= 0) {
+        this.dead = true;
+      }
+    }
+    
+    draw() {
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 2;
+      
+      for (let i = 1; i < this.points.length; i++) {
+        const p1 = this.points[i-1];
+        const p2 = this.points[i];
+        
+        // 번개 효과를 위한 지그재그 라인
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const segments = Math.ceil(dist / 15);
+        
+        for (let j = 1; j <= segments; j++) {
+          const ratio = j / segments;
+          const x = p1.x + (p2.x - p1.x) * ratio;
+          const y = p1.y + (p2.y - p1.y) * ratio;
+          const offset = (j % 2 === 0) ? 5 : -5;
+          const perpX = (p2.y - p1.y) / dist * offset;
+          const perpY = -(p2.x - p1.x) / dist * offset;
+          
+          ctx.lineTo(x + perpX, y + perpY);
+        }
+        
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        
+        // 연결점에 원 그리기
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(p2.x, p2.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  
+  class Boomerang {
+    constructor(x, y, damage, direction, powered = false) {
+      this.x = x;
+      this.y = y;
+      this.ox = x;
+      this.oy = y;
+      this.dir = direction;
+      this.timer = 0;
+      this.damage = damage;
+      this.range = 200;
+      this.powered = powered;
+      this.phase = "out";
+      this.dead = false;
+      this.hitEnemies = new Set(); // 이미 맞은 적 추적
+    }
+    
+    update(delta) {
+      this.timer += delta;
+      
+      // 전진 또는 후진 이동
+      const moveDir = this.phase === "out" ? 1 : -1;
+      this.x += this.dir.x * 400 * delta * moveDir;
+      this.y += this.dir.y * 400 * delta * moveDir;
+      
+      // 회전 효과를 위한 애니메이션 위치 조정
+      const angle = this.timer * 10;
+      this.displayX = this.x + Math.cos(angle) * 5;
+      this.displayY = this.y + Math.sin(angle) * 5;
+      
+      // 적 충돌 처리
+      enemies.forEach(e => {
+        if (Math.hypot(e.x - this.x, e.y - this.y) < 15 && !this.hitEnemies.has(e)) {
+          e.hp -= this.damage * (this.phase === "back" && this.powered ? 3 : 1);
+          this.hitEnemies.add(e);
+          effects.push(new Effect(e.x, e.y, "deepskyblue"));
+        }
+      });
+      
+      // 방향 전환 또는 소멸 처리
+      if (this.phase === "out" && Math.hypot(this.x - this.ox, this.y - this.oy) > this.range) {
+        this.phase = "back";
+      }
+      
+      if (this.phase === "back" && Math.hypot(this.x - this.ox, this.y - this.oy) < 10) {
+        this.dead = true;
+      }
+    }
+    
+    draw() {
+      ctx.fillStyle = "deepskyblue";
+      ctx.beginPath();
+      ctx.arc(this.displayX || this.x, this.displayY || this.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 궤적 효과 (옵션)
+      if (this.powered) {
+        ctx.strokeStyle = "rgba(0, 191, 255, 0.3)";
+        ctx.beginPath();
+        ctx.arc(this.displayX || this.x, this.displayY || this.y, 12, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  class Mine {
+    constructor(x, y, damage, enhanced = false) {
+      this.x = x;
+      this.y = y;
+      this.damage = damage;
+      this.radius = 10;
+      this.enhanced = enhanced;
+      this.armed = false;
+      this.timer = 1.0;
+      this.dead = false;
+    }
+
+    update(delta) {
+      if (this.dead) return;
+      if (!this.armed) {
+        this.timer -= delta;
+        if (this.timer <= 0) this.armed = true;
+        return;
+      }
+
+      for (const e of enemies) {
+        if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius) {
+          this.explode();
+          break;
+        }
+      }
+    }
+
+    explode() {
+      this.dead = true;
+      enemies.forEach(e => {
+        if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius * 2) {
+          e.hp -= this.damage;
+          if (this.enhanced) {
+            e.slow(0.5, 1.5);
+          }
+          effects.push(new Effect(e.x, e.y, "darkolivegreen"));
+        }
+      });
+
+      // 5레벨 특수: 2차 폭발
+      if (this.enhanced) {
+        setTimeout(() => {
+          enemies.forEach(e => {
+            if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius * 2) {
+              e.hp -= this.damage / 2;
+              effects.push(new Effect(e.x, e.y, "green"));
+            }
+          });
+        }, 200);
+      }
+    }
+
+    draw() {
+      if (!this.armed) return;
+      // 지뢰는 기본적으로 보이지 않지만 디버그용 원 추가 가능
+      ctx.fillStyle = "rgba(85,107,47,0.5)";
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+}
+  
+  class Effect {
+    constructor(x, y, color) {
+      this.x = x;
+      this.y = y;
+      this.color = color;
+      this.timer = 0.4;
+      this.startTimer = 0.4;
+      this.dead = false;
+    }
+    
+    update(delta) {
+      this.timer -= delta;
+      if (this.timer <= 0) this.dead = true;
+    }
+    
+    draw() {
+      const alpha = this.timer / this.startTimer;
+      ctx.globalAlpha = alpha;
+
+      switch (this.color) {
+        case "orange":  // 화상
+          ctx.fillStyle = "orange";
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, 8 * (1 + (1 - alpha)), 0, Math.PI * 2);
+          ctx.fill();
+          break;
+      
+        case "green":  // 독
+          ctx.fillStyle = "green";
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.arc(this.x + Math.random() * 10 - 5, this.y + Math.random() * 10 - 5, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          break;
+        
+        case "cyan":  // 빙결
+          ctx.strokeStyle = "cyan";
+          ctx.beginPath();
+          ctx.rect(this.x - 5, this.y - 5, 10, 10);
+          ctx.stroke();
+          break;
+        
+        case "red":  // 출혈
+          ctx.fillStyle = "red";
+          ctx.beginPath();
+          ctx.ellipse(this.x, this.y + 6, 3, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        
+        case "magenta":  // 혼란
+          ctx.strokeStyle = "magenta";
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, 8 + Math.sin(Date.now()/100) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        
+        default:  // 일반
+          ctx.strokeStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, 15 * (1 + (1 - alpha)), 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+      }
+    
+      ctx.globalAlpha = 1;
+    }
+  }
+  
+  // 유틸리티 함수
+  function getNearestEnemyDirection(x, y) {
+    if (!enemies.length) return {x: 1, y: 0}; // 적이 없을 경우 오른쪽 방향 기본값
+    
+    const nearest = enemies.reduce((a, b) =>
+      (Math.hypot(a.x - x, a.y - y) < Math.hypot(b.x - x, b.y - y) ? a : b), enemies[0]);
+    
+    const dx = nearest.x - x;
+    const dy = nearest.y - y;
+    const dist = Math.hypot(dx, dy);
+    
+    return {x: dx / dist, y: dy / dist};
+  }
+  
+  function showMessage(message, color = "white", duration = 3000) {
+    const msgElement = document.createElement("div");
+    msgElement.textContent = message;
+    msgElement.style.position = "absolute";
+    msgElement.style.bottom = "20px";
+    msgElement.style.left = "50%";
+    msgElement.style.transform = "translateX(-50%)";
+    msgElement.style.backgroundColor = "rgba(0,0,0,0.7)";
+    msgElement.style.color = color;
+    msgElement.style.padding = "10px 20px";
+    msgElement.style.borderRadius = "5px";
+    msgElement.style.zIndex = "100";
+    document.body.appendChild(msgElement);
+    
+    setTimeout(() => {
+      msgElement.style.opacity = "0";
+      msgElement.style.transition = "opacity 0.5s";
+      setTimeout(() => msgElement.remove(), 500);
+    }, duration);
+  }
+  
+  // 게임 관련 함수
+  function selectTower(type) {
+    if (!canAfford(type)) {
+      showMessage("돈이 부족합니다!", "red");
+      return;
+    }
+    
+    selectedTowerType = type;
+    placingTower = true;
+    canvas.style.cursor = "crosshair";
+  }
+  
+  function canAfford(towerType) {
+    return money >= towerCosts[towerType];
+  }
+  
+  function updateButtonStates() {
+    // 포탑 구매 버튼 활성화/비활성화
+    document.querySelectorAll('#shop button').forEach(button => {
+      const cost = Number(button.getAttribute('data-cost'));
+      button.disabled = money < cost;
+    });
+    
+    // 선택된 포탑 관련 버튼 활성화/비활성화
+    upgradeButton.disabled = !selectedTower;
+    sellButton.disabled = !selectedTower;
+  }
+  
+  function updateUI() {
+    document.getElementById('hp').textContent = hp;
+    document.getElementById('money').textContent = money;
+    document.getElementById('wave').textContent = wave;
+    
+    // 웨이브 진행 바 업데이트
+    const progress = enemiesToSpawn === 0 ? 100 : (1 - enemiesToSpawn / waveEnemies) * 100;
+    document.getElementById('waveProgress').style.width = `${progress}%`;
+    
+    // 버튼 상태 업데이트
+    updateButtonStates();
+  }
+  
+  function upgradeSelectedTower() {
+    if (!selectedTower) return;
+    
+    const upgradeCost = selectedTower.getUpgradeCost();
+    
+    if (money >= upgradeCost && selectedTower.level < 5) {
+      if (selectedTower.upgrade()) {
+        showMessage(`포탑 업그레이드 완료! (레벨 ${selectedTower.level})`, selectedTower.color);
+        updateUI();
+      }
+    } else if (selectedTower.level >= 5) {
+      showMessage("최대 레벨입니다!", "yellow");
+    } else {
+      showMessage(`업그레이드 비용이 부족합니다! (필요 금액: ${upgradeCost})`, "red");
+    }
+  }
+  
+  function sellSelectedTower() {
+    if (!selectedTower) return;
+    
+    const sellValue = selectedTower.getSellValue();
+    money += sellValue;
+    
+    // 타워 배열에서 제거
+    const index = towers.indexOf(selectedTower);
+    if (index >= 0) {
+      towers.splice(index, 1);
+      showMessage(`포탑 판매 완료! (+${sellValue})`, "gold");
+      selectedTower = null;
+      updateUI();
+    }
+  }
+  
+  function canvasClickHandler(e) {
+    // 게임 오버나 일시정지 상태에서는 처리하지 않음
+    if (isGameOver || isPaused) return;
+    
+    // 이벤트 중복 처리 방지 (포탑 배치 버그 해결)
+    if (isPlacing) return;
+    isPlacing = true;
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    // 클릭 좌표 계산 (스케일링 적용)
+    const clickX = (e.clientX - rect.left) * scaleX / (scaleFactor * devicePixelRatio);
+    const clickY = (e.clientY - rect.top) * scaleY / (scaleFactor * devicePixelRatio);
+    
+    // 기존 포탑 클릭 처리
+    const clickedTower = towers.find(t => Math.hypot(t.x - clickX, t.y - clickY) < 15);
+    
+    if (clickedTower) {
+      selectedTower = clickedTower;
+      placingTower = false;
+      canvas.style.cursor = "pointer";
+      updateButtonStates();
+    } 
+    // 포탑 배치 처리
+    else if (placingTower && canAfford(selectedTowerType)) {
+      towers.push(new Tower(clickX, clickY, selectedTowerType));
+      money -= towerCosts[selectedTowerType];
+      updateUI();
+      placingTower = false;
+      canvas.style.cursor = "default";
+    } 
+    // 포탑 선택 해제
+    else {
+      selectedTower = null;
+      canvas.style.cursor = "default";
+    }
+    
+    // 플래그 리셋 (비동기)
+    setTimeout(() => { isPlacing = false; }, 50);
+  }
+  
+  function canvasMouseMoveHandler(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    mouseX = (e.clientX - rect.left) * scaleX / (scaleFactor * devicePixelRatio);
+    mouseY = (e.clientY - rect.top) * scaleY / (scaleFactor * devicePixelRatio);
+    
+    // 포탑 정보 표시
+    const hoveredTower = towers.find(t => Math.hypot(t.x - mouseX, t.y - mouseY) < 15);
+    
+    if (hoveredTower) {
+      canvas.style.cursor = "pointer";
+      
+      // 포탑 정보 표시
+      towerInfo.style.display = "block";
+      towerInfo.style.left = `${e.clientX + 15}px`;
+      towerInfo.style.top = `${e.clientY + 15}px`;
+      
+      const upgradeCost = hoveredTower.getUpgradeCost();
+      const sellValue = hoveredTower.getSellValue();
+      
+      towerInfo.innerHTML = `
+        <strong>${hoveredTower.type.charAt(0).toUpperCase() + hoveredTower.type.slice(1)} 포탑</strong><br>
+        레벨: ${hoveredTower.level}/5<br>
+        데미지: ${hoveredTower.damage.toFixed(1)}<br>
+        공격 속도: ${(1 / hoveredTower.fireRate).toFixed(1)}/s<br>
+        범위: ${hoveredTower.range}<br>
+        ${hoveredTower.level < 5 ? `업그레이드: ${upgradeCost}` : '최대 레벨'}<br>
+        판매: ${sellValue}
+      `;
+    } else {
+      towerInfo.style.display = "none";
+      
+      // 포탑 배치 중이 아니면 커서 기본값으로
+      if (!placingTower) {
+        canvas.style.cursor = "default";
+      }
+    }
+  }
+  
+  function canvasTouchHandler(e) {
+    e.preventDefault();
+    
+    // 터치 이벤트를 클릭 이벤트로 변환
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const simulatedEvent = {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      };
+      
+      if (e.type === "touchstart") {
+        canvasClickHandler(simulatedEvent);
+      } else if (e.type === "touchmove") {
+        canvasMouseMoveHandler(simulatedEvent);
+      }
+    }
+  }
+  
+function startNewWave() {
+  wave++;
+  
+  // 웨이브별 적 수 계산
+  const baseEnemies = 1 + wave * 2;
+  let enemyMultiplier = 1;
+  let waveTheme = null;
+  
+  // 특별 웨이브 결정
+  if (wave % 5 === 0) {
+    // 보스 웨이브
+    enemyMultiplier = 0.3;
+    waveTheme = "boss";
+    showMessage(`보스 웨이브 ${wave} 시작!`, "red");
+  } 
+  else if (wave % 10 === 0) {
+    // 메가 보스 웨이브
+    enemyMultiplier = 0.5;
+    waveTheme = "megaboss";
+    showMessage(`메가 보스 웨이브 ${wave} 시작!`, "darkred", 5000);
+  }
+  else if (wave % 3 === 0) {
+    // 대량 웨이브
+    enemyMultiplier = 1.5;
+    waveTheme = "swarm";
+    showMessage(`대량 웨이브 ${wave} 시작!`, "orange");
+  }
+  else if (wave % 7 === 0) {
+    // 특수 적 웨이브
+    enemyMultiplier = 1.2;
+    waveTheme = "special";
+    showMessage(`특수 적 웨이브 ${wave} 시작!`, "purple");
+  }
+  else {
+    // 일반 웨이브
+    showMessage(`웨이브 ${wave} 시작!`);
+  }
+  
+  enemiesToSpawn = Math.floor(baseEnemies * enemyMultiplier);
+  waveEnemies = enemiesToSpawn;
+  lastEnemySpawn = 0;
+  waveCooldown = 0;
+  
+  // 전역 변수로 현재 웨이브 테마 저장
+  currentWaveTheme = waveTheme;
+  
+  updateUI();
+}
+
+  
+function spawnEnemy() {
+  if (enemiesToSpawn <= 0) return;
+  
+  const enemy = new Enemy(wave);
+  
+  // 특별 웨이브 테마에 따른 적 속성 조정
+  if (currentWaveTheme) {
+    switch(currentWaveTheme) {
+      case "boss":
+        // 보스 웨이브에서는 보스 확률 증가
+        if (Math.random() < 0.7) {
+          enemy.type = "boss";
+          enemy.applyTypeProperties(wave);
+        }
+        break;
+        
+      case "megaboss":
+        // 메가 보스 웨이브에서는 초강력 보스
+        enemy.type = "boss";
+        enemy.applyTypeProperties(wave);
+        enemy.hp *= 1.5;
+        enemy.maxHp = enemy.hp;
+        enemy.armorValue = Math.max(enemy.armorValue, 5);
+        break;
+        
+      case "swarm":
+        // 대량 웨이브에서는 빠른 적 증가
+        if (Math.random() < 0.6) {
+          enemy.type = "fast";
+          enemy.applyTypeProperties(wave);
+        }
+        break;
+        
+      case "special":
+        // 특수 웨이브에서는 다양한 특수 적 등장
+        const specialTypes = ["armored", "healer", "splitter", "invisible", "teleporter", "flying"];
+        const randomType = specialTypes[Math.floor(Math.random() * specialTypes.length)];
+        enemy.type = randomType;
+        enemy.applyTypeProperties(wave);
+        break;
+    }
+  }
+  
+  enemies.push(enemy);
+  enemiesToSpawn--;
+  lastEnemySpawn = 0;
+  updateUI();
+}
+
+  
+  function drawGame() {
+    ctx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+    
+    // 배경 그리드 그리기 (시각적 효과)
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.lineWidth = 1;
+    
+    for (let x = 0; x < BASE_WIDTH; x += 50) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, BASE_HEIGHT);
+      ctx.stroke();
+    }
+    
+    for (let y = 0; y < BASE_HEIGHT; y += 50) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(BASE_WIDTH, y);
+      ctx.stroke();
+    }
+    
+    // 게임 요소 그리기
+    towers.forEach(t => t.draw());
+    enemies.forEach(e => e.draw());
+    bullets.forEach(b => b.draw());
+    effects.forEach(e => e.draw());
+    
+    // 포탑 배치 중이면 범위 표시
+    if (placingTower && selectedTowerType) {
+      const stats = {
+        basic: {range: 150},
+        sniper: {range: 300},
+        machinegun: {range: 110},
+        fire: {range: 100},
+        slow: {range: 200},
+        aoe: {range: 150},
+        laser: {range: 100},
+        cannon: {range: 140},
+        electric: {range: 130},
+        poison: {range: 140},
+        gravity: {range: 160},
+        ice: {range: 130},
+        chainlightning: {range: 180},
+        explosion: {range: 140},
+        confuse: {range: 160},
+        drain: {range: 130},
+        dotlaser: {range: 140},
+        random: {range: 150},
+        boomerang: {range: 200},
+        sword: {range: 40},
+        gearsaw: {range: 20},
+        mine: {range: 120}
+      };
+      
+      const canPlace = canAfford(selectedTowerType);
+      
+      // 범위 원 표시
+      ctx.strokeStyle = canPlace ? "rgba(255,255,255,0.5)" : "rgba(255,0,0,0.5)";
+      ctx.beginPath();
+      ctx.arc(mouseX, mouseY, stats[selectedTowerType].range, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // 포탑 모양 미리보기
+      ctx.fillStyle = canPlace ? "rgba(255,255,255,0.5)" : "rgba(255,0,0,0.5)";
+      ctx.beginPath();
+      ctx.arc(mouseX, mouseY, 15, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  function updateGame(delta) {
+    // 적 생성
+    if (enemiesToSpawn > 0) {
+      lastEnemySpawn += delta;
+      if (lastEnemySpawn > (1 - Math.min(wave * 0.05, 0.5))) {
+        spawnEnemy();
+      }
+    }
+    // 웨이브 종료 및 새 웨이브 시작
+    else if (enemies.length === 0) {
+      waveCooldown += delta;
+      
+      if (waveCooldown >= 3) {
+        startNewWave();
+      }
+    }
+    
+    // 게임 요소 업데이트
+    towers.forEach(t => t.update(delta));
+    
+    enemies = enemies.filter(e => {
+      e.update(delta);
+  
+      if (e.x > BASE_WIDTH) {
+        const damage = e.type === "boss" ? 3 : e.type === "elite" ? 2 : 1;
+        hp -= damage;
+        updateUI();
+    
+      if (hp <= 0) {
+        gameOver();
+      }
+      return false;
+    }
+  
+      if (e.hp <= 0) {
+    // 적이 죽었을 때 돈 추가
+      if (e.type === "boss") {
+        money += 50; // 보스는 더 많은 보상
+      } else if (e.type === "elite") {
+        money += 20; // 엘리트는 보통보다 많은 보상
+      } else {
+        money += 10; // 일반 적
+      }
+      updateUI();
+      return false;
+    }
+  
+    return true;
+   });
+    
+    bullets = bullets.filter(b => {
+      b.update(delta);
+      return !b.dead;
+    });
+    
+    effects = effects.filter(e => {
+      e.update(delta);
+      return !e.dead;
+    });
+  }
+  
+  function gameOver() {
+    isGameOver = true;
+    document.getElementById('finalWave').textContent = wave;
+    gameOverModal.style.display = "flex";
+  }
+  
+  function resetGame() {
+    // 게임 상태 초기화
+    hp = 10;
+    money = 500;
+    wave = 0;
+    towers = [];
+    enemies = [];
+    bullets = [];
+    effects = [];
+    enemiesToSpawn = 0;
+    waveEnemies = 0;
+    lastEnemySpawn = 0;
+    waveCooldown = 0;
+    selectedTower = null;
+    placingTower = false;
+    selectedTowerType = null;
+    isGameOver = false;
+    currentWaveTheme = null;
+    
+    // UI 초기화
+    gameOverModal.style.display = "none";
+    updateUI();
+    
+    // 새 웨이브 시작
+    startNewWave();
+    
+    // 게임 루프 재시작
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+    }
+    
+    lastTime = performance.now();
+    gameLoop(lastTime);
+  }
+  
+  function gameLoop(timestamp) {
+    if (isGameOver) return;
+    
+    // 델타 타임 계산 (너무 긴 프레임 방지)
+    const delta = Math.min((timestamp - lastTime) / 1000, 0.1);
+    lastTime = timestamp;
+    
+    // 게임 상태 업데이트
+    updateGame(delta);
+    
+    // 게임 렌더링
+    drawGame();
+    
+    // 다음 프레임 요청
+    animationFrameId = requestAnimationFrame(gameLoop);
+  }
+  
+  // 게임 초기화 및 시작
+  window.onload = init;
+</script>
+</body>
+</html>
