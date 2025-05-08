@@ -218,6 +218,7 @@
       <button data-cost="90" onclick="selectTower('sword')">검포탑 (90)</button>
       <button data-cost="150" onclick="selectTower('gearsaw')">기어톱 (150)</button>
       <button data-cost="200" onclick="selectTower('mine')">지뢰 포탑 (200)</button>
+      <button data-cost="180" onclick="selectTower('generator')">생산기 (180)</button>
     </div>
     <div id="towerActions">
       <button id="upgradeButton" onclick="upgradeSelectedTower()" disabled>업그레이드</button>
@@ -300,7 +301,8 @@
     boomerang: 120,
     sword: 90,
     gearsaw: 150,
-    mine: 200
+    mine: 200,
+    generator: 180
   };
   
   // 포탑 설명 정의
@@ -327,6 +329,7 @@
     sword: "검포탑: 근접 범위에 강력한 피해를 줍니다.",
     gearsaw: "기어톱 포탑: 근접 범위 피해와 출혈 효과를 줍니다.",
     mine: "지뢰 포탑: 보이지 않는 지뢰를 설치해 적이 밟으면 폭발합니다.",
+    generator: "생산 포탑: 일정 시간마다 돈을 생성합니다.",
   };
 
   function init() {
@@ -439,7 +442,8 @@
         boomerang:     {range: 250, fireRate: 2.0, damage: 5, color: "deepskyblue"},
         sword:         {range: 40, fireRate: 0.6, damage: 6, color: "crimson"},
         gearsaw:       {range: 20, fireRate: 0.1, damage: 0.5, color: "silver"},
-        mine:          {range: 200, fireRate: 3, damage: 8, color: "darkolivegreen"},
+        mine:          {range: 200, fireRate: 5, damage: 8, color: "darkolivegreen"},
+        generator:     {range: 0, fireRate: 5, damage: 0, color: "gold"},
       };
       
       // 기본 스탯에 타입별 스탯 적용
@@ -689,6 +693,15 @@
               bullets.push(new Mine(mx, my, this.damage, this.abilityUnlocked));
               }
               break;
+          
+              case "generator":
+                const income = this.abilityUnlocked ? 15 : 5;
+                money += income;
+                updateUI(); // << 이 줄 추가
+                effects.push(new Effect(this.x, this.y, "gold"));
+                showMessage(`+${income}G`, "gold", 800);
+                break;
+
               
       }
       
@@ -721,7 +734,7 @@
       });
 
       // 공격 실행
-      if (this.lastShot >= this.fireRate && (this.targets.length > 0 || this.type === "mine")) {
+      if (this.lastShot >= this.fireRate && (this.targets.length > 0 || this.type === "mine"|| this.type === "generator")) {
         this.fire(this.targets[0]);  // ✅ 첫 번째 타겟만 전달
       }
     }
@@ -1504,7 +1517,7 @@
       this.x = x;
       this.y = y;
       this.damage = damage;
-      this.radius = 10;
+      this.radius = 5;
       this.enhanced = enhanced;
       this.armed = false;
       this.timer = 1.0;
@@ -1809,7 +1822,7 @@
         <strong>${hoveredTower.type.charAt(0).toUpperCase() + hoveredTower.type.slice(1)} 포탑</strong><br>
         레벨: ${hoveredTower.level}/5<br>
         데미지: ${hoveredTower.damage.toFixed(1)}<br>
-        공격 속도: ${(1 / hoveredTower.fireRate).toFixed(1)}/s<br>
+        공격 속도: ${(hoveredTower.fireRate).toFixed(1)}/s<br>
         범위: ${hoveredTower.range}<br>
         ${hoveredTower.level < 5 ? `업그레이드: ${upgradeCost}` : '최대 레벨'}<br>
         판매: ${sellValue}
@@ -1978,23 +1991,24 @@ function spawnEnemy() {
         machinegun: {range: 110},
         fire: {range: 100},
         slow: {range: 200},
-        aoe: {range: 150},
-        laser: {range: 100},
+        aoe: {range: 180},
+        laser: {range: 150},
         cannon: {range: 140},
         electric: {range: 130},
-        poison: {range: 140},
-        gravity: {range: 160},
-        ice: {range: 130},
-        chainlightning: {range: 180},
+        poison: {range: 200},
+        gravity: {range: 100},
+        ice: {range: 250},
+        chainlightning: {range: 250},
         explosion: {range: 140},
         confuse: {range: 160},
         drain: {range: 130},
-        dotlaser: {range: 140},
+        dotlaser: {range: 200},
         random: {range: 150},
-        boomerang: {range: 200},
+        boomerang: {range: 250},
         sword: {range: 40},
         gearsaw: {range: 20},
-        mine: {range: 200}
+        mine: {range: 200},
+        generator: {range: 0}
       };
       
       const canPlace = canAfford(selectedTowerType);
