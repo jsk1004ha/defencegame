@@ -219,7 +219,10 @@
       <button data-cost="150" onclick="selectTower('gearsaw')">기어톱 (150)</button>
       <button data-cost="200" onclick="selectTower('mine')">지뢰 포탑 (200)</button>
       <button data-cost="180" onclick="selectTower('generator')">생산기 (180)</button>
-      <button data-cost="150" onclick="selectTower('wall')">벽 (150)</button>
+      <button data-cost="100" onclick="selectTower('wall')">벽 (100)</button>
+      <button data-cost="260" onclick="selectTower('clone')">복제 (260)</button>
+      <button data-cost="240" onclick="selectTower('purify')">정화 (240)</button>
+
     </div>
     <div id="towerActions">
       <button id="upgradeButton" onclick="upgradeSelectedTower()" disabled>업그레이드</button>
@@ -261,7 +264,7 @@
   let bullets = [];
   let effects = [];
   let hp = 10;
-  let money = 600;
+  let money = 6000;
   let wave = 0;
   let enemiesToSpawn = 0;
   let waveEnemies = 0;
@@ -304,7 +307,9 @@
     gearsaw: 150,
     mine: 200,
     generator: 180,
-    wall: 150
+    wall: 100,
+    clone: 260,
+    purify: 240
   };
   
   // 포탑 설명 정의
@@ -333,6 +338,8 @@
     mine: "지뢰 포탑: 보이지 않는 지뢰를 설치해 적이 밟으면 폭발합니다.",
     generator: "생산 포탑: 일정 시간마다 돈을 생성합니다.",
     wall: "벽 포탑: 공격하지 않고 적을 막습니다. 체력을 가집니다.",
+    clone: "복제 포탑: 일정 시간마다 미니 포탑을 복제해 방어를 확장합니다.",
+    purify: "정화 포탑: 범위 내 적의 특수 능력을 봉인합니다.",
   };
 
   function init() {
@@ -448,6 +455,9 @@
         mine:          {range: 200, fireRate: 5, damage: 8, color: "darkolivegreen"},
         generator:     {range: 0, fireRate: 5, damage: 0, color: "gold"},
         wall:          {range: 10, fireRate: 0, damage: 10, color: "gray", hp: 70},
+        clone:         {range: 150, fireRate: 3, damage: 3, color: "lightgray"},
+        purify:        {range: 200, fireRate: 5.0, damage: 0, color: "white"},
+
       };
 
       if (type === "wall") {
@@ -718,9 +728,58 @@
               showMessage(`+${income}G`, "gold", 800);
               break;
 
-              case "wall":
+            case "wall":
                 // 공격 안함
-                break;
+              break;
+            
+            case "clone":
+              // 일반 공격: 가장 가까운 적에게 기본 공격
+              if (t) {
+                bullets.push(new Bullet(this.x, this.y, t, this.damage, this.color));
+              }
+            
+              // 복제 로직 (2레벨 이상부터)
+              if (this.level >= 2) {
+                if (!this.spawnedMiniTowers) this.spawnedMiniTowers = [];
+                const spawnLimit = this.level >= 5 ? 5 : this.level;
+              
+                if (this.spawnedMiniTowers.length < spawnLimit) {
+                  const offset = (Math.random() - 0.5) * 150;
+                  const mx = this.x + offset;
+                  const my = this.y + offset;
+                
+                  const mini = new Tower(mx, my, "basic");
+                  mini.level = 1;
+                  mini.damage *= 0.6;
+                  mini.range *= 0.8;
+                  mini.fireRate *= 1.2;
+                  mini.color = "gray";
+                  mini.isMini = true;
+                  mini.parentClone = this;
+                
+                  this.spawnedMiniTowers.push(mini);
+                  towers.push(mini);
+                  showMessage("미니 포탑 생성!", "lightgray", 1000);
+                }
+              }
+              break;
+              
+            case "purify":
+              const silenceDuration = this.abilityUnlocked ? 4 : 2;
+              const stunDuration = this.abilityUnlocked ? 1 : 0;
+              enemies.forEach(e => {
+                const dist = Math.hypot(e.x - this.x, e.y - this.y);
+                if (dist < this.range) {
+                  e.silenced = silenceDuration;
+                  if (this.abilityUnlocked) {
+                    e.stunned = stunDuration;
+                  }
+                  effects.push(new Effect(e.x, e.y, "#ffffaa"));
+                }
+              });
+            
+              showMessage("정화 발동!", "#ffffaa", 1000);
+              break;
 
               
       }
@@ -757,20 +816,34 @@
       if (this.lastShot >= this.fireRate && (this.targets.length > 0 || this.type === "mine"|| this.type === "generator")) {
         this.fire(this.targets[0]);  // ✅ 첫 번째 타겟만 전달
       }
+
+      if (this.type === "clone" && this.spawnedMiniTowers) {
+        // 죽은 미니 포탑 제거
+        this.spawnedMiniTowers = this.spawnedMiniTowers.filter(t => towers.includes(t));
+      }
+
     }
     
     draw() {
       // 포탑 본체 그리기
       ctx.fillStyle = this.color;
       ctx.beginPath();
-      ctx.arc(this.x, this.y, 15, 0, Math.PI * 2);
+          
+      const size = this.isMini ? 10 : 15;
+      ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
       ctx.fill();
+          
+      // 투명도 적용
+      if (this.isMini) ctx.globalAlpha = 0.5;
       
       // 포탑 수준 표시
       ctx.fillStyle = "white";
       ctx.font = "10px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`Lv${this.level}`, this.x, this.y + 30);
+      ctx.fillText(
+        this.isMini ? "Mini" : `Lv${this.level}`,
+        this.x, this.y + 30
+      );
       
       // 선택된 포탑 하이라이트
       if (this === selectedTower) {
@@ -807,6 +880,14 @@
         ctx.fillStyle = hpRatio > 0.5 ? "lime" : hpRatio > 0.25 ? "yellow" : "red";
         ctx.fillRect(this.x - 15, this.y - this.height/2 - 10, 30 * hpRatio, 4);
       }
+
+      if (this.isMini) {
+        ctx.strokeStyle = "gray";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
   }
   
@@ -830,6 +911,11 @@
     this.poisonStack = false;
     this.teleportCooldown = 0;
     this.teleportTimer = 0;
+    this.silenced = 0;
+    this.healBlocked = false;
+    this.armorIgnored = false;
+    this.stunned = 0;
+
     
     // 새로운 속성 추가
     this.armorValue = 0;      // 방어력
@@ -979,6 +1065,11 @@
   }
 
     update(delta) {
+      if (this.stunned > 0) {
+        this.stunned -= delta;
+        return; // stun 중에는 아무 것도 못함
+      }
+      
       // 얼음 효과 처리
       if (this.freezeTimer > 0) { 
         this.freezeTimer -= delta; 
@@ -997,6 +1088,7 @@
         this.healTimer += delta;
 
         if (this.healTimer >= 2) { // 2초마다 치유
+          if (this.healBlocked) return;
           this.healTimer = 0;
 
           // 범위 내 모든 적 치유
@@ -1102,6 +1194,13 @@
       if (this.hp <= 0 && this.isSplitter) {
         this.split();
       }
+
+      if (this.silenced > 0) this.silenced -= delta;
+      if (this.silenced <= 0) this.healBlocked = false;
+      if (this.silenced <= 0) this.armorIgnored = false;
+          
+      if (this.healBlocked) return;  // heal 중단 조건 (heal 타이머 처리 내)
+
     }
 
     split() {
@@ -1131,7 +1230,7 @@
     takeDamage(amount, ignoreArmor = false) {
       // 방어력 적용
       let actualDamage = amount;
-      if (this.armorValue > 0 && !ignoreArmor) {
+      if (this.armorValue > 0 && !ignoreArmor && !this.armorIgnored) {
         actualDamage = Math.max(1, amount - this.armorValue);
       }
       
@@ -1282,6 +1381,14 @@
           sx += width;  // 다음 상태 바는 오른쪽에 붙이기
         }
       });
+
+      if (this.silenced > 0) {
+        ctx.fillStyle = "#ffffaa";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 14, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
 
       // 투명도 리셋
       ctx.globalAlpha = 1;
@@ -2072,7 +2179,9 @@ function spawnEnemy() {
         gearsaw: {range: 20},
         mine: {range: 200},
         generator: {range: 0},
-        wall: {range: 0}
+        wall: {range: 0},
+        clone: {range: 150},
+        purify: {range: 200}
       };
       
       const canPlace = canAfford(selectedTowerType);
