@@ -222,6 +222,9 @@
       <button data-cost="100" onclick="selectTower('wall')">벽 (100)</button>
       <button data-cost="260" onclick="selectTower('clone')">복제 (260)</button>
       <button data-cost="240" onclick="selectTower('purify')">정화 (240)</button>
+      <button data-cost="200" onclick="selectTower('mortar')">박격포 (200)</button>
+      <button data-cost="280" onclick="selectTower('railgun')">레일건 (280)</button>
+      <button data-cost="240" onclick="selectTower('executor')">집행자 (240)</button>
 
     </div>
     <div id="towerActions">
@@ -281,6 +284,12 @@
   let mouseX = 0;
   let mouseY = 0;
   let currentWaveTheme = null;
+  let earlySellBonusUsed = false;
+  const earlyDiscountUsed = {
+    basic: false,
+    laser: false,
+    machinegun: false
+  };
   
   // 포탑 가격 정의
   const towerCosts = {
@@ -309,7 +318,10 @@
     generator: 180,
     wall: 100,
     clone: 260,
-    purify: 240
+    purify: 240,
+    mortar: 200,
+    railgun: 280,
+    executor: 240
   };
   
   // 포탑 설명 정의
@@ -340,6 +352,9 @@
     wall: "벽 포탑: 공격하지 않고 적을 막습니다. 체력을 가집니다.",
     clone: "복제 포탑: 일정 시간마다 미니 포탑을 복제해 방어를 확장합니다.",
     purify: "정화 포탑: 범위 내 적의 특수 능력을 봉인합니다.",
+    mortar: "박격포 포탑: 공중 포함 장거리 폭격이 가능하지만 최소 사거리 안은 공격 불가.",
+    railgun: "레일건 포탑: 직선 관통으로 다수 적에게 강한 피해를 줍니다.",
+    executor: "집행자 포탑: 체력이 낮은 적을 우선 처형하는 마무리 특화 포탑입니다.",
   };
 
   function init() {
@@ -457,6 +472,9 @@
         wall:          {range: 10, fireRate: 0, damage: 10, color: "gray", hp: 70},
         clone:         {range: 150, fireRate: 3, damage: 3, color: "lightgray"},
         purify:        {range: 200, fireRate: 5.0, damage: 0, color: "white"},
+        mortar:        {range: 320, fireRate: 2.8, damage: 14, color: "sandybrown", minRange: 70},
+        railgun:       {range: 280, fireRate: 3.5, damage: 11, color: "aqua"},
+        executor:      {range: 190, fireRate: 1.4, damage: 4, color: "black"},
 
       };
 
@@ -781,6 +799,56 @@
               showMessage("정화 발동!", "#ffffaa", 1000);
               break;
 
+            case "mortar":
+              bullets.push(new Bullet(this.x, this.y, t, this.damage, "sandybrown", false, true));
+              if (this.level >= 3) {
+                enemies.forEach(e => {
+                  if (e !== t && Math.hypot(e.x - t.x, e.y - t.y) < 55) {
+                    e.burning = Math.max(e.burning, 1.5);
+                  }
+                });
+              }
+              if (this.level >= 5) {
+                t.stunned = Math.max(t.stunned, 0.8);
+              }
+              break;
+
+            case "railgun": {
+              const baseWidth = this.level >= 3 ? 18 : 12;
+              const bonusDamage = this.level >= 5 ? 1.25 : 1;
+              enemies.forEach(e => {
+                const distToBeam = distancePointToSegment(
+                  e.x, e.y, this.x, this.y, t.x, t.y
+                );
+                if (distToBeam < baseWidth && Math.hypot(e.x - this.x, e.y - this.y) <= this.range + 40) {
+                  e.takeDamage(this.damage * bonusDamage, this.level >= 3);
+                  effects.push(new Effect(e.x, e.y, "aqua"));
+                }
+              });
+              break;
+            }
+
+            case "executor": {
+              const target = this.targets.reduce((lowest, current) => {
+                const lowestRatio = lowest.hp / lowest.maxHp;
+                const currentRatio = current.hp / current.maxHp;
+                return currentRatio < lowestRatio ? current : lowest;
+              }, this.targets[0]);
+
+              if (target) {
+                const hpRatio = target.hp / target.maxHp;
+                const executeThreshold = this.level >= 5 ? 0.35 : this.level >= 3 ? 0.2 : 0;
+                if (executeThreshold > 0 && hpRatio <= executeThreshold) {
+                  target.hp = 0;
+                  effects.push(new Effect(target.x, target.y, "black", 1.2));
+                } else {
+                  const missingHpBonus = 1 + ((1 - hpRatio) * 1.2);
+                  bullets.push(new Bullet(this.x, this.y, target, this.damage * missingHpBonus, "black"));
+                }
+              }
+              break;
+            }
+
               
       }
       
@@ -796,6 +864,7 @@
 
         // 사거리 내에 있는지 확인
         if (distance >= this.range) return false;
+        if (this.type === "mortar" && distance <= (this.minRange || 0)) return false;
 
         // 비행 유닛 확인 (일부 포탑은 비행 유닛 공격 불가)
         if (e.isFlying) {
@@ -990,6 +1059,7 @@
   applyTypeProperties(wave) {
     // 기본 적 속성 재설정
     this.hp = 10 + wave * 1.9;
+    if (wave <= 3) this.hp *= 0.9;
     this.maxHp = this.hp;
     this.speed = 40 + wave;
     this.baseSpeed = this.speed;
@@ -1827,6 +1897,31 @@
     
     return {x: dx / dist, y: dy / dist};
   }
+
+  function distancePointToSegment(px, py, x1, y1, x2, y2) {
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    const param = lenSq !== 0 ? dot / lenSq : -1;
+
+    let xx;
+    let yy;
+    if (param < 0) {
+      xx = x1;
+      yy = y1;
+    } else if (param > 1) {
+      xx = x2;
+      yy = y2;
+    } else {
+      xx = x1 + param * C;
+      yy = y1 + param * D;
+    }
+
+    return Math.hypot(px - xx, py - yy);
+  }
   
   function showMessage(message, color = "white", duration = 3000) {
     const msgElement = document.createElement("div");
@@ -1851,6 +1946,7 @@
   
   // 게임 관련 함수
   function selectTower(type) {
+    const towerCost = getTowerCost(type);
     if (!canAfford(type)) {
       showMessage("돈이 부족합니다!", "red");
       return;
@@ -1859,17 +1955,30 @@
     selectedTowerType = type;
     placingTower = true;
     canvas.style.cursor = "crosshair";
+    showMessage(`${type} 선택 (비용: ${towerCost})`, "white", 600);
   }
   
+  function getTowerCost(towerType) {
+    const baseCost = towerCosts[towerType];
+    const isEarlyDiscountTarget = ["basic", "laser", "machinegun"].includes(towerType);
+    if (wave <= 5 && isEarlyDiscountTarget && !earlyDiscountUsed[towerType]) {
+      return Math.floor(baseCost * 0.85);
+    }
+    return baseCost;
+  }
+
   function canAfford(towerType) {
-    return money >= towerCosts[towerType];
+    return money >= getTowerCost(towerType);
   }
   
   function updateButtonStates() {
     // 포탑 구매 버튼 활성화/비활성화
     document.querySelectorAll('#shop button').forEach(button => {
-      const cost = Number(button.getAttribute('data-cost'));
-      button.disabled = money < cost;
+      const onclick = button.getAttribute('onclick') || '';
+      const match = onclick.match(/selectTower\('([^']+)'\)/);
+      if (!match) return;
+      const towerType = match[1];
+      button.disabled = money < getTowerCost(towerType);
     });
     
     // 선택된 포탑 관련 버튼 활성화/비활성화
@@ -1910,7 +2019,11 @@
   function sellSelectedTower() {
     if (!selectedTower) return;
     
-    const sellValue = selectedTower.getSellValue();
+    const baseSellValue = selectedTower.getSellValue();
+    const sellValue = (!earlySellBonusUsed && wave <= 5)
+      ? Math.floor(baseSellValue * 1.3)
+      : baseSellValue;
+
     money += sellValue;
     
     // 타워 배열에서 제거
@@ -1918,6 +2031,7 @@
     if (index >= 0) {
       towers.splice(index, 1);
       showMessage(`포탑 판매 완료! (+${sellValue})`, "gold");
+      if (!earlySellBonusUsed && wave <= 5) earlySellBonusUsed = true;
       selectedTower = null;
       updateUI();
     }
@@ -1950,8 +2064,12 @@
     } 
     // 포탑 배치 처리
     else if (placingTower && canAfford(selectedTowerType)) {
+      const purchaseCost = getTowerCost(selectedTowerType);
       towers.push(new Tower(clickX, clickY, selectedTowerType));
-      money -= towerCosts[selectedTowerType];
+      money -= purchaseCost;
+      if (["basic", "laser", "machinegun"].includes(selectedTowerType) && wave <= 5) {
+        earlyDiscountUsed[selectedTowerType] = true;
+      }
       updateUI();
       placingTower = false;
       canvas.style.cursor = "default";
@@ -2047,7 +2165,7 @@ function startNewWave() {
     waveTheme = "megaboss";
     showMessage(`메가 보스 웨이브 ${wave} 시작!`, "darkred", 5000);
   }
-  else if (wave % 3 === 0) {
+  else if (wave % 3 === 0 && wave >= 6) {
     // 대량 웨이브
     enemyMultiplier = 1.5;
     waveTheme = "swarm";
@@ -2181,7 +2299,10 @@ function spawnEnemy() {
         generator: {range: 0},
         wall: {range: 0},
         clone: {range: 150},
-        purify: {range: 200}
+        purify: {range: 200},
+        mortar: {range: 320},
+        railgun: {range: 280},
+        executor: {range: 190}
       };
       
       const canPlace = canAfford(selectedTowerType);
@@ -2243,6 +2364,9 @@ function spawnEnemy() {
       } else {
         money += 10; // 일반 적
       }
+      if (wave <= 3) {
+        money += 3; // 초반 경제 완충 보너스
+      }
       updateUI();
       return false;
     }
@@ -2285,6 +2409,10 @@ function spawnEnemy() {
     selectedTowerType = null;
     isGameOver = false;
     currentWaveTheme = null;
+    earlySellBonusUsed = false;
+    earlyDiscountUsed.basic = false;
+    earlyDiscountUsed.laser = false;
+    earlyDiscountUsed.machinegun = false;
     
     // UI 초기화
     gameOverModal.style.display = "none";
